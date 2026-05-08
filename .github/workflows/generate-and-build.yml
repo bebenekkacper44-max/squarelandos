@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # REQUIRED for auto-commit
+  contents: write
 
 jobs:
   generate-and-build:
@@ -30,20 +30,18 @@ jobs:
       - name: Generate SquareLandOS project
         if: steps.check.outputs.empty == 'true'
         run: |
-          echo "Generating full Android project..."
+          echo "Generating SquareLandOS project..."
 
           mkdir -p app/src/main/java/com/squareland/os
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/assets/squareland
 
-          # settings.gradle
           cat > settings.gradle << 'EOF'
 rootProject.name = "SquareLandOS"
 include(":app")
 EOF
 
-          # Root build.gradle
           cat > build.gradle << 'EOF'
 buildscript {
     repositories {
@@ -64,7 +62,6 @@ allprojects {
 }
 EOF
 
-          # app/build.gradle
           cat > app/build.gradle << 'EOF'
 plugins {
     id "com.android.application"
@@ -106,7 +103,6 @@ dependencies {
 }
 EOF
 
-          # Manifest
           cat > app/src/main/AndroidManifest.xml << 'EOF'
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.squareland.os">
@@ -129,7 +125,6 @@ EOF
 </manifest>
 EOF
 
-          # MainActivity
           cat > app/src/main/java/com/squareland/os/MainActivity.kt << 'EOF'
 package com.squareland.os
 
@@ -154,7 +149,6 @@ class MainActivity : AppCompatActivity() {
 }
 EOF
 
-          # Layout
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -162,7 +156,6 @@ EOF
     android:layout_height="match_parent" />
 EOF
 
-          # Colors
           cat > app/src/main/res/values/colors.xml << 'EOF'
 <resources>
     <color name="squareland_background">#05060A</color>
@@ -170,14 +163,12 @@ EOF
 </resources>
 EOF
 
-          # Theme
           cat > app/src/main/res/values/themes.xml << 'EOF'
 <resources>
     <style name="Theme.SquareLandOS" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
 </resources>
 EOF
 
-          # Fallback asset
           cat > app/src/main/assets/squareland/index.html << 'EOF'
 <!DOCTYPE html>
 <html><body style="background:#000;color:#fff;">
