@@ -1,0 +1,217 @@
+name: Generate Project + Build APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # REQUIRED for auto-commit
+
+jobs:
+  generate-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect if repo is empty
+        id: check
+        run: |
+          if [ -z "$(ls -A .)" ]; then
+            echo "empty=true" >> $GITHUB_OUTPUT
+          else
+            echo "empty=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate SquareLandOS project
+        if: steps.check.outputs.empty == 'true'
+        run: |
+          echo "Generating full Android project..."
+
+          mkdir -p app/src/main/java/com/squareland/os
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/assets/squareland
+
+          # settings.gradle
+          cat > settings.gradle << 'EOF'
+rootProject.name = "SquareLandOS"
+include(":app")
+EOF
+
+          # Root build.gradle
+          cat > build.gradle << 'EOF'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.5.0"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+EOF
+
+          # app/build.gradle
+          cat > app/build.gradle << 'EOF'
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+}
+
+android {
+    namespace "com.squareland.os"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.squareland.os"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug { debuggable true }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.13.1"
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    implementation "com.google.android.material:material:1.12.0"
+}
+EOF
+
+          # Manifest
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.squareland.os">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="SquareLand OS"
+        android:theme="@style/Theme.SquareLandOS">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+
+          # MainActivity
+          cat > app/src/main/java/com/squareland/os/MainActivity.kt << 'EOF'
+package com.squareland.os
+
+import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val webView = WebView(this)
+        setContentView(webView)
+
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.webViewClient = WebViewClient()
+
+        webView.loadUrl("https://squarelandos.lovable.app")
+    }
+}
+EOF
+
+          # Layout
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+EOF
+
+          # Colors
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+<resources>
+    <color name="squareland_background">#05060A</color>
+    <color name="squareland_accent">#00E5FF</color>
+</resources>
+EOF
+
+          # Theme
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+<resources>
+    <style name="Theme.SquareLandOS" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+</resources>
+EOF
+
+          # Fallback asset
+          cat > app/src/main/assets/squareland/index.html << 'EOF'
+<!DOCTYPE html>
+<html><body style="background:#000;color:#fff;">
+SquareLandOS fallback asset loaded.
+</body></html>
+EOF
+
+      - name: Commit generated project
+        if: steps.check.outputs.empty == 'true'
+        run: |
+          git config user.name "SquareLandOS-AutoGen"
+          git config user.email "autogen@squarelandos"
+          git add .
+          git commit -m "Auto-generated SquareLandOS project"
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Build APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SquareLandOS-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
